@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-ink: #134e4a;
+  --color-ink-muted: #5f7a76;
+  --color-surface: #f0fdfa;
+  --color-surface-2: #ccfbf1;
+  --color-card: #ffffff;
+  --color-brand: #0f766e;
+  --color-brand-dark: #115e59;
+  --color-accent: #d97706;
+  --color-accent-soft: #fef3c7;
+  --color-success: #15803d;
+  --color-danger: #b91c1c;
+  --color-path-done: #0d9488;
+  --color-path-lock: #cbd5e1;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background:
+    radial-gradient(ellipse 120% 80% at 10% -20%, #99f6e4 0%, transparent 50%),
+    radial-gradient(ellipse 90% 60% at 100% 0%, #fde68a 0%, transparent 45%),
+    var(--color-surface);
+  background-attachment: fixed;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.safe-bottom {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
