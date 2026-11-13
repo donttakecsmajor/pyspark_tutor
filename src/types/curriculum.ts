@@ -86,9 +86,16 @@ export interface CodeSqlExercise {
   prompt: string
   schemaSql: string
   seedSql: string
+  /** A reference solution. Tests run it to prove expectedRows is what the SQL really returns. */
   expectedQuery?: string
-  /** Rows as arrays; compared as sets of stringified rows */
+  /** Rows as arrays; compared as sets of stringified rows unless orderMatters */
   expectedRows: (string | number | null)[][]
+  /** Grade row order too (ORDER BY lessons). Default false: order ignored. */
+  orderMatters?: boolean
+  /** Require these output column names (case-insensitive), e.g. to check an AS alias. */
+  expectedColumns?: string[]
+  /** One nudge shown on request, before the solution. */
+  hint?: string
   starter?: string
   explanation: string
   tags?: string[]
