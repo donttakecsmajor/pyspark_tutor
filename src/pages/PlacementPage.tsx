@@ -1,118 +1,80 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import type { PlacementQuestion, TrackId } from '../types/curriculum'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { TrackId } from '../types/curriculum'
+import type { Experience } from '../types/progress'
 import { ExercisePlayer } from '../components/ExercisePlayer'
+import { LessonFrame } from '../components/LessonFrame'
 import { useProgress } from '../store/progressStore'
-import { chaptersForTrack, TRACK_META } from '../lib/curriculumApi'
+import { chaptersForTrack } from '../lib/curriculumApi'
+import { TRACK_LABELS } from '../lib/theme'
 import { getPlacement } from '../data/placement'
+import {
+  PLACEMENT_MAX_QUESTIONS,
+  pickNextQuestion,
+  placementFinished,
+  recommendedStartIndex,
+  recordPlacementAnswer,
+  startPlacement,
+} from '../lib/plan'
 
+interface FlowState {
+  experience?: Experience | null
+  dailyGoalXp?: number
+}
+
+/** Adaptive level check: each answer moves the next question harder or easier. */
 export function PlacementPage() {
   const { track = 'sql' } = useParams<{ track: TrackId }>()
-  const questions = useMemo(() => getPlacement(track as TrackId), [track])
-  const [index, setIndex] = useState(0)
-  const [scoreSum, setScoreSum] = useState(0)
-  const [answered, setAnswered] = useState(0)
-  const [done, setDone] = useState(false)
-  const [rating, setRating] = useState(1)
-  const { finishPlacement } = useProgress()
+  const t = track as TrackId
   const navigate = useNavigate()
+  const flow = (useLocation().state ?? {}) as FlowState
+  const storedExperience = useProgress((s) => s.experience)
+  const experience = flow.experience ?? storedExperience
 
-  const current: PlacementQuestion | undefined = questions[index]
+  const bank = useMemo(() => getPlacement(t), [t])
+  const chapters = useMemo(() => chaptersForTrack(t), [t])
+  const [state, setState] = useState(() => startPlacement(experience))
+  const current = useMemo(() => pickNextQuestion(bank, state), [bank, state])
+  const total = Math.min(PLACEMENT_MAX_QUESTIONS, bank.length)
 
-  function computeRating(sum: number, count: number) {
-    if (count === 0) return 1
-    const avg = sum / count
-    // map avg difficulty-weighted correctness 0-5 → rating 1-5
-    return Math.max(1, Math.min(5, Math.round(avg * 10) / 10))
-  }
-
-  function unlockForRating(r: number) {
-    const chapters = chaptersForTrack(track as TrackId)
-    // unlock first chapter always; higher rating unlocks further chapters as starting point
-    const startIndex = r >= 4 ? Math.min(6, chapters.length - 1) : r >= 3 ? Math.min(3, chapters.length - 1) : 0
-    return chapters.slice(0, startIndex + 1).map((c) => c.id)
+  function goToPlan(theta: number, startIndex: number) {
+    navigate(`/plan/${t}`, { state: { ...flow, experience, theta, startIndex }, replace: true })
   }
 
   function handleResult(correct: boolean) {
     if (!current) return
-    const gain = correct ? current.difficulty : current.difficulty * 0.15
-    const nextSum = scoreSum + gain
-    const nextAnswered = answered + 1
-    setScoreSum(nextSum)
-    setAnswered(nextAnswered)
-
-    if (index + 1 >= questions.length) {
-      const max = questions.reduce((s, q) => s + q.difficulty, 0)
-      const r = computeRating((nextSum / max) * 5, 1)
-      setRating(r)
-      setDone(true)
+    const next = recordPlacementAnswer(state, current, correct)
+    if (placementFinished(next, bank)) {
+      goToPlan(next.theta, recommendedStartIndex(next, bank, chapters))
       return
     }
-    setIndex((i) => i + 1)
+    setState(next)
   }
 
-  function confirm() {
-    finishPlacement(track as TrackId, rating, unlockForRating(rating))
-    navigate('/')
-  }
-
-  if (!questions.length) {
+  if (!bank.length || !current) {
     return (
       <div className="p-6">
-        <p>No placement questions.</p>
-        <Link to="/">Back</Link>
+        <p className="font-bold">No level-check questions for this track yet.</p>
+        <Link to="/" className="font-bold text-brand">Back</Link>
       </div>
     )
   }
-
-  if (done) {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
-        <p className="text-sm font-semibold text-ink-muted">
-          {TRACK_META[track as TrackId].label} placement
-        </p>
-        <h1 className="mt-2 font-display text-3xl font-bold">Level {rating.toFixed(1)}</h1>
-        <p className="mt-3 text-ink-muted">
-          Untimed placement complete. Your path starts at a matching chapter.
-        </p>
-        <button
-          type="button"
-          onClick={confirm}
-          className="mt-8 w-full max-w-sm rounded-xl bg-brand py-3.5 font-semibold text-white"
-        >
-          Start learning
-        </button>
-      </div>
-    )
-  }
-
-  if (!current) return null
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pt-4 pb-8">
-      <div className="mb-3 flex items-center gap-2">
-        <button type="button" onClick={() => navigate('/')} className="p-2 text-ink-muted">
-          <ArrowLeft className="h-5 w-5" />
+    <LessonFrame progress={state.answered / total} onClose={() => navigate(-1)} closeLabel="Back">
+      <p className="mb-3 text-xs font-extrabold tracking-wider text-ink-muted uppercase">
+        Level check · {TRACK_LABELS[t]} · {state.answered + 1} of {total}
+      </p>
+      <ExercisePlayer key={current.id} exercise={current.exercise} onResult={handleResult} />
+      {state.answered === 0 ? (
+        <button
+          type="button"
+          className="mt-6 text-sm font-extrabold text-brand"
+          onClick={() => goToPlan(1, 0)}
+        >
+          Skip the level check and start from the beginning
         </button>
-        <div className="flex-1">
-          <p className="text-xs text-ink-muted">Untimed placement · {TRACK_META[track as TrackId].label}</p>
-          <p className="font-semibold">
-            Question {index + 1} / {questions.length}
-          </p>
-        </div>
-      </div>
-      <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full bg-brand transition-all"
-          style={{ width: `${((index + 1) / questions.length) * 100}%` }}
-        />
-      </div>
-      <ExercisePlayer
-        key={current.id}
-        exercise={current.exercise}
-        onResult={handleResult}
-      />
-    </div>
+      ) : null}
+    </LessonFrame>
   )
 }

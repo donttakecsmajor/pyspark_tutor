@@ -7,9 +7,11 @@ import {
   type UserProgress,
 } from '../types/progress'
 import type { TrackId } from '../types/curriculum'
+import { localDayKey } from '../lib/plan'
+import { chaptersForTrack } from '../lib/curriculumApi'
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10)
+  return localDayKey()
 }
 
 function load(): UserProgress {
@@ -18,7 +20,7 @@ function load(): UserProgress {
     if (!raw) return createDefaultProgress()
     const parsed = JSON.parse(raw) as UserProgress
     if (parsed.version !== 1) return createDefaultProgress()
-    return parsed
+    return { ...createDefaultProgress(), ...parsed }
   } catch {
     return createDefaultProgress()
   }
@@ -50,6 +52,25 @@ interface ProgressStore extends UserProgress {
   exportJson: () => string
   importJson: (json: string) => boolean
   resetAll: () => void
+  /** Finish onboarding: place the learner at `startIndex` and mark earlier chapters mastered. */
+  startPlan: (opts: {
+    track: TrackId
+    startIndex: number
+    rating: number
+    dailyGoalXp: number
+    experience: UserProgress['experience']
+  }) => void
+  /** Passed a test-out checkpoint: mark the chapter mastered and open the next one. */
+  markMastered: (chapterId: string, nextChapterId?: string) => void
+  setDailyGoal: (xp: number) => void
+}
+
+function gainXp(cur: UserProgress, amount: number): Pick<UserProgress, 'xp' | 'dailyXp'> {
+  const day = todayKey()
+  return {
+    xp: cur.xp + amount,
+    dailyXp: { ...cur.dailyXp, [day]: (cur.dailyXp[day] ?? 0) + amount },
+  }
 }
 
 function withUpdate(p: UserProgress): UserProgress {
@@ -98,7 +119,7 @@ export const useProgress = create<ProgressStore>((set, get) => ({
     const next = withUpdate({
       ...cur,
       completedSteps: [...cur.completedSteps, stepId],
-      xp: cur.xp + xp,
+      ...gainXp(cur, xp),
       unlockedChapters: [...unlocked],
     })
     persist(next)
@@ -140,7 +161,7 @@ export const useProgress = create<ProgressStore>((set, get) => ({
       chapterCrowns: crowns,
       ratings,
       unlockedChapters: [...unlocked],
-      xp: cur.xp + (passed ? 40 : 10),
+      ...gainXp(cur, passed ? 40 : 10),
     })
     persist(next)
     set(next)
@@ -220,7 +241,7 @@ export const useProgress = create<ProgressStore>((set, get) => ({
 
   addXp: (amount) => {
     const cur = get()
-    const next = withUpdate({ ...cur, xp: cur.xp + amount })
+    const next = withUpdate({ ...cur, ...gainXp(cur, amount) })
     persist(next)
     set(next)
   },
@@ -258,6 +279,51 @@ export const useProgress = create<ProgressStore>((set, get) => ({
 
   resetAll: () => {
     const next = createDefaultProgress()
+    persist(next)
+    set(next)
+  },
+
+  startPlan: ({ track, startIndex, rating, dailyGoalXp, experience }) => {
+    const cur = get()
+    const chapters = chaptersForTrack(track)
+    const mastered = new Set(cur.masteredChapters)
+    const unlocked = new Set(cur.unlockedChapters)
+    chapters.slice(0, startIndex).forEach((c) => {
+      mastered.add(c.id)
+      unlocked.add(c.id)
+    })
+    if (chapters[startIndex]) unlocked.add(chapters[startIndex].id)
+    const next = withUpdate({
+      ...cur,
+      onboardingDone: true,
+      activeTrack: track,
+      experience,
+      dailyGoalXp,
+      ratings: { ...cur.ratings, [track]: rating },
+      placementDone: { ...cur.placementDone, [track]: true },
+      masteredChapters: [...mastered],
+      unlockedChapters: [...unlocked],
+    })
+    persist(next)
+    set(next)
+  },
+
+  markMastered: (chapterId, nextChapterId) => {
+    const cur = get()
+    const unlocked = new Set(cur.unlockedChapters)
+    unlocked.add(chapterId)
+    if (nextChapterId) unlocked.add(nextChapterId)
+    const next = withUpdate({
+      ...cur,
+      masteredChapters: [...new Set([...cur.masteredChapters, chapterId])],
+      unlockedChapters: [...unlocked],
+    })
+    persist(next)
+    set(next)
+  },
+
+  setDailyGoal: (xp) => {
+    const next = withUpdate({ ...get(), dailyGoalXp: xp })
     persist(next)
     set(next)
   },

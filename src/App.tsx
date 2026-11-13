@@ -7,6 +7,7 @@ import { PracticePage } from './pages/PracticePage'
 import { ReferencePage } from './pages/ReferencePage'
 import { ProfilePage } from './pages/ProfilePage'
 import { PlacementPage } from './pages/PlacementPage'
+import { PlanPage } from './pages/PlanPage'
 import { WelcomePage } from './pages/WelcomePage'
 import { useProgress } from './store/progressStore'
 import { initCurriculum } from './data'
@@ -68,14 +69,9 @@ export default function App() {
               </Gate>
             }
           />
-          <Route
-            path="/placement/:track"
-            element={
-              <Gate>
-                <PlacementPage />
-              </Gate>
-            }
-          />
+          {/* Onboarding flow: reachable before onboardingDone, so not behind Gate. */}
+          <Route path="/placement/:track" element={<PlacementPage />} />
+          <Route path="/plan/:track" element={<PlanPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

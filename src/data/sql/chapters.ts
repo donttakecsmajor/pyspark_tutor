@@ -17,41 +17,92 @@ export const sqlChapters: Chapter[] = [
     [
       step('select-basics-s1', 'What SELECT does', [
         teach(
-          'Projection and result sets',
-          'SELECT builds a result set: a table of columns you ask for, evaluated row by row (logically). You are not mutating storage — you are projecting and transforming data for the consumer. Column order in SELECT is the column order in the result.',
-          'SELECT employee_id, last_name, salary * 1.1 AS new_salary\nFROM employees;',
+          'A table is a spreadsheet',
+          'Databases keep data in tables. A table looks just like a spreadsheet: every row is one thing (here, one customer) and every column is one fact about it.\n\nThis table is called customers. SQL is how you ask questions about tables like this one.',
+          undefined,
           ['select'],
+          {
+            table: {
+              name: 'customers',
+              columns: ['id', 'name', 'city', 'signup_year'],
+              rows: [
+                [1, 'Ada', 'Lahore', 2023],
+                [2, 'Bilal', 'Karachi', 2022],
+                [3, 'Cara', 'Lahore', 2024],
+                [4, 'Dev', 'Mumbai', 2023],
+              ],
+            },
+          },
+        ),
+        teach(
+          'SELECT picks the columns',
+          'SELECT says which columns you want. FROM says which table to read them from.\n\nRead it like a sentence: "select name and city from customers". Every row comes back, but only those two columns.',
+          'SELECT name, city\nFROM customers;',
+          ['select'],
+          {
+            result: {
+              columns: ['name', 'city'],
+              rows: [
+                ['Ada', 'Lahore'],
+                ['Bilal', 'Karachi'],
+                ['Cara', 'Lahore'],
+                ['Dev', 'Mumbai'],
+              ],
+            },
+          },
         ),
         mcq(
-          'What does a SELECT statement primarily produce?',
+          'Which query returns just the name of every customer?',
           [
-            'A permanent copy of the source table',
-            'A result set of projected/computed columns',
-            'A lock that freezes the table until commit',
-            'An index on the selected columns',
+            'SELECT name FROM customers;',
+            'FROM customers SELECT name;',
+            'SELECT customers FROM name;',
+            'GET name FROM customers;',
           ],
-          1,
-          'SELECT returns a result set. It does not by itself persist a new table or create indexes.',
+          0,
+          'SELECT comes first (what you want), then FROM (where it lives).',
           { tags: ['select'] },
         ),
         fill(
-          'Complete a query that returns every column from orders.',
-          'SELECT ___ FROM orders;',
-          ['*'],
-          'SELECT * returns all columns. Prefer explicit column lists in production queries.',
+          'Get the city of every customer.',
+          'SELECT ___ FROM customers;',
+          ['city'],
+          'Put the column you want between SELECT and FROM.',
           ['select'],
         ),
-        match(
-          'Match SELECT concepts to their meaning.',
-          [
-            { left: 'Projection', right: 'Choosing which columns appear in the result' },
-            { left: 'Alias (AS)', right: 'Renames a column or expression in the result' },
-            { left: 'Expression', right: 'Computed value, e.g. salary * 1.1' },
-            { left: 'FROM', right: 'Names the source relation(s)' },
+        teach(
+          'Star means everything',
+          'SELECT * means "every column". It is perfect for a quick look at a table.\n\nIn real reports, list the columns you need instead. It is clearer for the next reader and faster for the database.',
+          'SELECT *\nFROM customers;',
+          ['select'],
+          {
+            result: {
+              columns: ['id', 'name', 'city', 'signup_year'],
+              rows: [
+                [1, 'Ada', 'Lahore', 2023],
+                [2, 'Bilal', 'Karachi', 2022],
+                [3, 'Cara', 'Lahore', 2024],
+                [4, 'Dev', 'Mumbai', 2023],
+              ],
+            },
+          },
+        ),
+        sqlCode({
+          id: 'sql-code-select-0',
+          prompt: 'Your turn: show the name and signup_year of every customer.',
+          schemaSql: 'CREATE TABLE customers (id INT, name TEXT, city TEXT, signup_year INT);',
+          seedSql:
+            "INSERT INTO customers VALUES (1,'Ada','Lahore',2023),(2,'Bilal','Karachi',2022),(3,'Cara','Lahore',2024),(4,'Dev','Mumbai',2023);",
+          expectedRows: [
+            ['Ada', 2023],
+            ['Bilal', 2022],
+            ['Cara', 2024],
+            ['Dev', 2023],
           ],
-          'SELECT list = projection; FROM names sources; AS renames outputs.',
-          ['select'],
-        ),
+          starter: 'SELECT ',
+          explanation: 'SELECT name, signup_year FROM customers;',
+          tags: ['select'],
+        }),
       ]),
       step('select-basics-s2', 'Column lists & aliases', [
         teach(

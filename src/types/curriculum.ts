@@ -10,12 +10,23 @@ export type ExerciseType =
   | 'code_sql'
   | 'code_pyspark'
 
+export interface TeachTable {
+  name?: string
+  columns: string[]
+  rows: (string | number | null)[][]
+}
+
 export interface TeachExercise {
   id: string
   type: 'teach'
   title: string
+  /** Paragraphs separated by blank lines. Plain language first; jargon after the example. */
   body: string
   code?: string
+  /** The data the lesson is about, shown before the query. */
+  table?: TeachTable
+  /** What the query returns, shown after the query. */
+  result?: TeachTable
   tags?: string[]
 }
 

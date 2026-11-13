@@ -7,6 +7,7 @@ import type {
   ReorderExercise,
   BugExercise,
   TeachExercise,
+  TeachTable,
   Step,
   TrackId,
 } from '../types/curriculum'
@@ -22,8 +23,9 @@ export function teach(
   body: string,
   code?: string,
   tags?: string[],
+  extra?: { table?: TeachTable; result?: TeachTable },
 ): TeachExercise {
-  return { id: eid('teach'), type: 'teach', title, body, code, tags }
+  return { id: eid('teach'), type: 'teach', title, body, code, tags, ...extra }
 }
 
 export function mcq(
