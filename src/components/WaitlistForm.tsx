@@ -1,13 +1,8 @@
 import { useState } from 'react'
 import { isValidEmail } from '../lib/email'
+import { WAITLIST_URL } from '../lib/waitlist'
 
-/**
- * Where signups are POSTed. Set VITE_WAITLIST_URL at build time to a form
- * endpoint that accepts JSON (Formspree, Buttondown, a Google Apps Script,
- * etc.). When unset the form is hidden in production, so a visitor never
- * submits an email into the void.
- */
-const ENDPOINT = import.meta.env.VITE_WAITLIST_URL as string | undefined
+const ENDPOINT = WAITLIST_URL
 const JOINED_KEY = 'sparkfluent-waitlist-joined'
 
 function alreadyJoined(): boolean {
@@ -45,7 +40,7 @@ export function WaitlistForm({ source }: { source: string }) {
 
   if (status === 'done') {
     return (
-      <p className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-ink">
+      <p className="rounded-2xl border-2 border-success bg-success-soft px-4 py-3 text-sm font-bold text-success-dark">
         You&apos;re on the list. We&apos;ll email you when the paid tracks open.
       </p>
     )
@@ -95,12 +90,12 @@ export function WaitlistForm({ source }: { source: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@email.com"
-          className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+          className="min-w-0 flex-1 rounded-2xl border-2 border-line bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-brand"
         />
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          className="btn btn-primary !w-auto !px-5 !py-3 !text-sm"
         >
           {status === 'sending' ? 'Joining…' : 'Join'}
         </button>

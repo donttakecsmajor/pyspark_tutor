@@ -16,8 +16,18 @@ export interface ReviewItem {
   dueAt: string
 }
 
+export type Experience = 'new' | 'some' | 'work'
+
 export interface UserProgress {
   version: 1
+  /** Self-reported at onboarding; seeds the placement difficulty. */
+  experience: Experience | null
+  /** XP the learner aims to earn per day (5 min ≈ 15 XP). */
+  dailyGoalXp: number
+  /** XP earned per local calendar day, keyed YYYY-MM-DD. */
+  dailyXp: Record<string, number>
+  /** Chapters the learner tested or placed out of. Still reviewable. */
+  masteredChapters: string[]
   onboardingDone: boolean
   activeTrack: TrackId
   ratings: Record<TrackId, number>
@@ -42,6 +52,10 @@ export function createDefaultProgress(): UserProgress {
   const now = new Date().toISOString()
   return {
     version: 1,
+    experience: null,
+    dailyGoalXp: 30,
+    dailyXp: {},
+    masteredChapters: [],
     onboardingDone: false,
     activeTrack: 'sql',
     ratings: { sql: 1, pyspark: 1, bridge: 1 },

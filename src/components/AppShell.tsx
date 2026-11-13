@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 
-const hideNav = ['/lesson', '/checkpoint', '/placement', '/welcome']
+const hideNav = ['/lesson', '/checkpoint', '/placement', '/welcome', '/plan']
 
 export function AppShell() {
   const { pathname } = useLocation()

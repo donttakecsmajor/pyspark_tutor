@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getChapter, nextChapterId } from '../lib/curriculumApi'
 import { ExercisePlayer } from '../components/ExercisePlayer'
+import { LessonFrame } from '../components/LessonFrame'
+import { Confetti } from '../components/Confetti'
+import { Mascot } from '../components/Mascot'
 import { useProgress } from '../store/progressStore'
 import { exercisePrompt, exerciseTags } from '../engine/checkAnswer'
 import type { Exercise } from '../types/curriculum'
 
 export function CheckpointPage() {
   const { chapterId = '' } = useParams()
+  const [search] = useSearchParams()
+  const testOut = search.get('testout') === '1'
   const chapter = getChapter(chapterId)
   const navigate = useNavigate()
-  const { recordCheckpoint, addReview, completedSteps } = useProgress()
+  const { recordCheckpoint, markMastered, addReview, completedSteps } = useProgress()
 
   const questions = useMemo(() => {
     if (!chapter) return [] as Exercise[]
@@ -30,18 +34,23 @@ export function CheckpointPage() {
   if (!chapter) {
     return (
       <div className="p-6">
-        <p>Chapter not found.</p>
-        <Link to="/">Back</Link>
+        <p className="font-bold">Chapter not found.</p>
+        <Link to="/" className="font-bold text-brand">Back</Link>
       </div>
     )
   }
 
-  if (!allStepsDone) {
+  if (!allStepsDone && !testOut) {
     return (
-      <div className="p-6">
-        <p className="font-semibold">Finish all steps before the checkpoint.</p>
-        <Link to="/" className="mt-3 inline-block text-brand">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-white px-6 text-center">
+        <Mascot size={96} mood="think" />
+        <p className="mt-4 text-xl font-extrabold">Finish the lessons first</p>
+        <p className="mt-1 font-semibold text-ink-muted">The checkpoint unlocks when every step is done.</p>
+        <Link to="/" className="btn btn-primary mt-6 max-w-xs">
           Back to path
+        </Link>
+        <Link to={`/checkpoint/${chapter.id}?testout=1`} className="mt-4 text-sm font-extrabold text-brand">
+          Or test out of this chapter
         </Link>
       </div>
     )
@@ -54,7 +63,9 @@ export function CheckpointPage() {
     setScore(pct)
     setPassed(ok)
     setFinished(true)
-    recordCheckpoint(chapter.id, pct, ok, nextChapterId(chapter.id))
+    const next = nextChapterId(chapter.id)
+    recordCheckpoint(chapter.id, pct, ok, next)
+    if (ok && testOut) markMastered(chapter.id, next)
   }
 
   function handleResult(correct: boolean) {
@@ -79,34 +90,33 @@ export function CheckpointPage() {
 
   if (finished) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
-        <p className="text-sm font-semibold uppercase tracking-wide text-ink-muted">Checkpoint</p>
-        <h1 className="mt-2 font-display text-3xl font-bold">
-          {passed ? 'Chapter cleared' : 'Keep practicing'}
+      <div className="flex min-h-dvh flex-col items-center bg-white px-6 pt-16 pb-10 text-center">
+        {passed ? <Confetti /> : null}
+        <div className="anim-pop">
+          <Mascot size={128} mood={passed ? 'cheer' : 'sad'} />
+        </div>
+        <h1 className="mt-4 text-3xl font-extrabold">
+          {passed ? (testOut ? 'Tested out!' : 'Chapter cleared!') : 'So close'}
         </h1>
-        <p className="mt-3 text-5xl font-bold text-brand">{score}%</p>
-        <p className="mt-2 text-ink-muted">
-          Pass mark {chapter.passScore}% · {correctCount}/{questions.length} correct
+        <p className="mt-2 text-6xl font-extrabold text-brand">{score}%</p>
+        <p className="mt-2 font-bold text-ink-muted">
+          {correctCount}/{questions.length} correct · pass mark {chapter.passScore}%
         </p>
-        <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
-          <button
-            type="button"
-            className="w-full rounded-xl bg-brand py-3.5 font-semibold text-white"
-            onClick={() => navigate('/')}
-          >
+        <div className="mt-auto flex w-full max-w-sm flex-col gap-3 pt-10">
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/')}>
             Back to path
           </button>
           {!passed ? (
             <button
               type="button"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3.5 font-semibold"
+              className="btn btn-secondary"
               onClick={() => {
                 setIndex(0)
                 setCorrectCount(0)
                 setFinished(false)
               }}
             >
-              Retry checkpoint
+              Try again
             </button>
           ) : null}
         </div>
@@ -117,26 +127,16 @@ export function CheckpointPage() {
   if (!current) return null
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pt-4 pb-8">
-      <div className="mb-3 flex items-center gap-2">
-        <button type="button" onClick={() => navigate('/')} className="rounded-lg p-2 text-ink-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex-1">
-          <p className="text-xs text-ink-muted">Untimed checkpoint</p>
-          <p className="font-semibold">{chapter.title}</p>
-        </div>
-        <span className="text-sm text-ink-muted">
-          {index + 1}/{questions.length}
-        </span>
-      </div>
-      <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full bg-slate-800 transition-all"
-          style={{ width: `${((index + 1) / questions.length) * 100}%` }}
-        />
-      </div>
+    <LessonFrame
+      progress={index / questions.length}
+      onClose={() => {
+        if (index === 0 || confirm('Quit the checkpoint? Your answers so far will be lost.')) navigate('/')
+      }}
+    >
+      <p className="mb-3 text-xs font-extrabold tracking-wider text-ink-muted uppercase">
+        {testOut ? 'Test out' : 'Checkpoint'} · {chapter.title}
+      </p>
       <ExercisePlayer key={current.id} exercise={current} onResult={handleResult} />
-    </div>
+    </LessonFrame>
   )
 }

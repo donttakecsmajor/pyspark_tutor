@@ -1,140 +1,157 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark } from 'lucide-react'
+import { Flame, Target, Zap } from 'lucide-react'
 import { getChapter, getStep } from '../lib/curriculumApi'
 import { ExercisePlayer } from '../components/ExercisePlayer'
+import { LessonFrame } from '../components/LessonFrame'
+import { Confetti } from '../components/Confetti'
+import { Mascot } from '../components/Mascot'
 import { WaitlistForm } from '../components/WaitlistForm'
+import { waitlistVisible } from '../lib/waitlist'
 import { useProgress } from '../store/progressStore'
 import { exercisePrompt, exerciseTags, isGraded } from '../engine/checkAnswer'
+
+function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: string }) {
+  return (
+    <div className={`flex-1 rounded-2xl border-2 bg-white ${tone}`}>
+      <p className="px-2 pt-1.5 text-center text-[11px] font-extrabold tracking-wider text-white uppercase">{label}</p>
+      <div className="flex items-center justify-center gap-1.5 rounded-xl bg-white px-2 py-3 text-lg font-extrabold text-ink">
+        {icon}
+        {value}
+      </div>
+    </div>
+  )
+}
 
 export function LessonPage() {
   const { chapterId = '', stepId = '' } = useParams()
   const navigate = useNavigate()
   const chapter = getChapter(chapterId)
   const step = getStep(chapterId, stepId)
-  const { completeStep, addReview, toggleBookmark, bookmarks, notes, setNote } = useProgress()
+  const { completeStep, addReview, onboardingDone, completedSteps, streak } = useProgress()
   const [index, setIndex] = useState(0)
-  const [showNote, setShowNote] = useState(false)
   const [finished, setFinished] = useState(false)
-  // Visitors arriving from a shared link haven't onboarded; they get a
-  // finish screen with next steps instead of being dropped on an empty path.
-  const isGuest = !useProgress((s) => s.onboardingDone)
+  const [gradedCount, setGradedCount] = useState(0)
+  const [correctCount, setCorrectCount] = useState(0)
+  // Captured once: after completeStep runs, "already done" would read true.
+  const [firstTime] = useState(() => !completedSteps.includes(stepId))
+  // Visitors arriving from a shared link haven't onboarded.
+  const isGuest = !onboardingDone
 
   const exercises = step?.exercises ?? []
   const current = exercises[index]
-  const progressPct = exercises.length ? ((index + 1) / exercises.length) * 100 : 0
-
-  const bookmarked = bookmarks.includes(stepId)
-
-  const note = notes[stepId] ?? ''
-
-  const title = useMemo(() => step?.title ?? '', [step])
+  const home = isGuest ? '/welcome' : '/'
 
   if (!chapter || !step || !current) {
     return (
       <div className="p-6">
-        <p>Step not found.</p>
-        <Link to="/" className="text-brand">
+        <p className="font-bold">Lesson not found.</p>
+        <Link to={home} className="font-bold text-brand">
           Back
         </Link>
       </div>
     )
   }
 
-  if (finished) {
-    return (
-      <div className="flex min-h-dvh flex-col px-6 pt-16 pb-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">
-          Lesson complete
-        </p>
-        <h1 className="mt-3 font-display text-3xl font-bold text-ink">Nice work.</h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-ink-muted">
-          You finished &ldquo;{step.title}&rdquo; from {chapter.title}. There&apos;s a full path
-          after this one, and it&apos;s free to keep going.
-        </p>
-        <Link
-          to="/welcome"
-          className="mt-8 rounded-xl bg-brand py-3.5 text-center font-semibold text-white"
-        >
-          Continue learning
-        </Link>
-        <div className="mt-8 rounded-xl border border-teal-100 bg-white/80 p-4">
-          <WaitlistForm source="lesson-complete" />
-        </div>
-      </div>
-    )
-  }
+  const nextStep = chapter.steps[chapter.steps.findIndex((s) => s.id === step.id) + 1]
 
   function handleResult(correct: boolean) {
     if (!current || !chapter || !step) return
-    if (isGraded(current) && !correct) {
-      addReview({
-        exerciseId: current.id,
-        track: chapter.track,
-        chapterId: chapter.id,
-        prompt: exercisePrompt(current),
-        tags: exerciseTags(current),
-      })
+    if (isGraded(current)) {
+      setGradedCount((n) => n + 1)
+      if (correct) setCorrectCount((n) => n + 1)
+      else
+        addReview({
+          exerciseId: current.id,
+          track: chapter.track,
+          chapterId: chapter.id,
+          prompt: exercisePrompt(current),
+          tags: exerciseTags(current),
+        })
     }
     if (index + 1 >= exercises.length) {
       completeStep(step.id, chapter.id, step.xp)
-      if (isGuest) {
-        setFinished(true)
-        return
-      }
-      navigate('/', { replace: true })
+      setFinished(true)
       return
     }
     setIndex((i) => i + 1)
   }
 
-  return (
-    <div className="flex min-h-dvh flex-col px-4 pt-4 pb-8">
-      <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate(isGuest ? '/welcome' : '/')}
-          className="rounded-lg p-2 text-ink-muted hover:bg-white"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex-1">
-          <p className="text-xs text-ink-muted">{chapter.title}</p>
-          <p className="font-semibold">{title}</p>
+  if (finished) {
+    const accuracy = gradedCount ? Math.round((correctCount / gradedCount) * 100) : 100
+    return (
+      <div className="flex min-h-dvh flex-col bg-white px-6 pt-14 pb-10 text-center">
+        <Confetti />
+        <div className="anim-pop mx-auto">
+          <Mascot size={132} mood="cheer" />
         </div>
-        <button
-          type="button"
-          onClick={() => toggleBookmark(stepId)}
-          className={`rounded-lg p-2 ${bookmarked ? 'text-accent' : 'text-ink-muted'}`}
-        >
-          <Bookmark className="h-5 w-5" fill={bookmarked ? 'currentColor' : 'none'} />
-        </button>
+        <h1 className="mt-4 text-3xl font-extrabold text-ink">Lesson complete!</h1>
+        <p className="mt-1 font-bold text-ink-muted">{step.title}</p>
+        <div className="mt-6 flex gap-3">
+          <StatCard
+            tone="border-accent bg-accent"
+            label="XP"
+            value={`+${firstTime ? step.xp : 0}`}
+            icon={<Zap className="h-5 w-5 fill-accent text-accent" />}
+          />
+          <StatCard
+            tone="border-brand bg-brand"
+            label="Accuracy"
+            value={`${accuracy}%`}
+            icon={<Target className="h-5 w-5 text-brand" />}
+          />
+          <StatCard
+            tone="border-danger bg-danger"
+            label="Streak"
+            value={`${streak}`}
+            icon={<Flame className="h-5 w-5 fill-accent text-accent" />}
+          />
+        </div>
+        {!firstTime ? (
+          <p className="mt-3 text-sm font-semibold text-ink-muted">Practice run: XP counts the first time only.</p>
+        ) : null}
+        <div className="mt-auto flex flex-col gap-3 pt-10">
+          {isGuest ? (
+            <>
+              <Link to="/welcome" className="btn btn-primary">
+                Set up my learning plan
+              </Link>
+              {waitlistVisible ? (
+                <div className="rounded-2xl border-2 border-line p-4 text-left">
+                  <WaitlistForm source="lesson-complete" />
+                </div>
+              ) : null}
+            </>
+          ) : nextStep ? (
+            <>
+              <Link to={`/lesson/${chapter.id}/${nextStep.id}`} replace className="btn btn-primary">
+                Next lesson
+              </Link>
+              <button type="button" className="btn btn-secondary" onClick={() => navigate('/')}>
+                Back to path
+              </button>
+            </>
+          ) : (
+            <Link to="/" className="btn btn-primary">
+              Continue
+            </Link>
+          )}
+        </div>
       </div>
+    )
+  }
 
-      <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full bg-brand transition-all" style={{ width: `${progressPct}%` }} />
-      </div>
-
-      <div className="flex-1">
-        <ExercisePlayer key={current.id} exercise={current} onResult={handleResult} />
-      </div>
-
-      <button
-        type="button"
-        className="mt-4 text-sm text-ink-muted underline"
-        onClick={() => setShowNote((s) => !s)}
-      >
-        {showNote ? 'Hide notes' : 'Personal notes'}
-      </button>
-      {showNote ? (
-        <textarea
-          className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
-          rows={3}
-          value={note}
-          placeholder="Notes for this step…"
-          onChange={(e) => setNote(stepId, e.target.value)}
-        />
-      ) : null}
-    </div>
+  return (
+    <LessonFrame
+      progress={index / exercises.length}
+      onClose={() => {
+        if (index === 0 || confirm('Quit this lesson? Your progress in it will be lost.')) navigate(home)
+      }}
+    >
+      <p className="mb-3 text-xs font-extrabold tracking-wider text-ink-muted uppercase">
+        {chapter.title} · {step.title}
+      </p>
+      <ExercisePlayer key={current.id} exercise={current} onResult={handleResult} />
+    </LessonFrame>
   )
 }

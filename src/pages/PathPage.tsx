@@ -1,176 +1,202 @@
 import { Link } from 'react-router-dom'
-import { Crown, Lock, Star, Check } from 'lucide-react'
+import { Check, Crown, Lock, Star } from 'lucide-react'
 import { useProgress } from '../store/progressStore'
-import { chaptersForTrack, TRACK_META } from '../lib/curriculumApi'
-import type { TrackId } from '../types/curriculum'
+import { chaptersForTrack } from '../lib/curriculumApi'
+import { isChapterUnlocked } from '../lib/plan'
+import { TRACK_COLORS } from '../lib/theme'
+import { TopStats } from '../components/TopStats'
+import { Mascot } from '../components/Mascot'
 
-const tracks: TrackId[] = ['sql', 'pyspark', 'bridge']
+/** Horizontal wiggle (px) so the path snakes down the screen instead of a straight line. */
+const WIGGLE = [0, -34, -52, -34, 0, 34, 52, 34]
+
+type NodeState = 'done' | 'current' | 'open' | 'locked' | 'mastered'
+
+function Node({
+  state,
+  color,
+  dark,
+  to,
+  label,
+  children,
+}: {
+  state: NodeState
+  color: string
+  dark: string
+  to?: string
+  label: string
+  children: React.ReactNode
+}) {
+  const palette =
+    state === 'locked'
+      ? { face: '#d9dee8', edge: '#b7bfce', ink: '#8a94a8' }
+      : state === 'done'
+        ? { face: '#1fa95b', edge: '#168745', ink: '#fff' }
+        : state === 'mastered'
+          ? { face: '#8fd6a8', edge: '#5fb67f', ink: '#fff' }
+          : { face: color, edge: dark, ink: '#fff' }
+  const common = {
+    className:
+      'relative flex h-[72px] w-[72px] items-center justify-center rounded-full transition active:translate-y-[5px]',
+    style: {
+      background: palette.face,
+      color: palette.ink,
+      boxShadow: `0 6px 0 ${palette.edge}`,
+    } as React.CSSProperties,
+    'aria-label': label,
+  }
+  return to && state !== 'locked' ? (
+    <Link to={to} {...common}>
+      {children}
+    </Link>
+  ) : (
+    <div {...common} aria-disabled>
+      {children}
+    </div>
+  )
+}
 
 export function PathPage() {
-  const {
-    activeTrack,
-    setActiveTrack,
-    completedSteps,
-    unlockedChapters,
-    chapterCrowns,
-    checkpointHistory,
-    placementDone,
-    ratings,
-    xp,
-    streak,
-  } = useProgress()
-
+  const progress = useProgress()
+  const { activeTrack, completedSteps, checkpointHistory, masteredChapters } = progress
   const chapters = chaptersForTrack(activeTrack)
-  const firstId = chapters[0]?.id
+  const colors = TRACK_COLORS[activeTrack]
 
-  function isUnlocked(chapterId: string, index: number) {
-    if (unlockedChapters.includes(chapterId)) return true
-    if (index === 0) return true
-    if (!placementDone[activeTrack] && index === 0) return true
-    // unlock sequentially if previous checkpoint passed or all steps done
-    const prev = chapters[index - 1]
-    if (!prev) return true
-    const prevPassed = (checkpointHistory[prev.id] ?? []).some((a) => a.passed)
-    if (prevPassed) return true
-    // allow first chapter always
-    return index === 0 || chapterId === firstId
+  // The single "you are here" step: first unfinished step in the first open, unfinished chapter.
+  let currentStepId: string | undefined
+  for (let ci = 0; ci < chapters.length && !currentStepId; ci++) {
+    if (!isChapterUnlocked(ci, chapters, progress)) break
+    if (masteredChapters.includes(chapters[ci].id)) continue
+    currentStepId = chapters[ci].steps.find((s) => !completedSteps.includes(s.id))?.id
   }
 
-  function stepStatus(stepId: string, chapterUnlocked: boolean) {
-    if (!chapterUnlocked) return 'locked'
-    if (completedSteps.includes(stepId)) return 'done'
-    return 'available'
-  }
-
-  function findCurrentStep(stepIds: string[]) {
-    return stepIds.find((id) => !completedSteps.includes(id))
-  }
+  const placementDone = progress.placementDone[activeTrack]
 
   return (
-    <div className="px-4 pt-6 pb-8">
-      <header className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand">SparkFluent</p>
-        <h1 className="font-display text-3xl font-bold text-ink">Your path</h1>
-        <div className="mt-2 flex gap-3 text-sm text-ink-muted">
-          <span>{xp} XP</span>
-          <span>·</span>
-          <span>{streak} day streak</span>
-          <span>·</span>
-          <span>
-            {TRACK_META[activeTrack].label} Lv {ratings[activeTrack].toFixed(1)}
-          </span>
-        </div>
-      </header>
-
-      <div className="mb-6 flex gap-2">
-        {tracks.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setActiveTrack(t)}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-sm font-semibold transition ${
-              activeTrack === t
-                ? 'bg-brand text-white'
-                : 'bg-white text-ink-muted border border-slate-200'
-            }`}
+    <div>
+      <TopStats />
+      <div className="px-4 pt-4 pb-6">
+        {!placementDone ? (
+          <Link
+            to={`/placement/${activeTrack}`}
+            state={{ experience: progress.experience, dailyGoalXp: progress.dailyGoalXp }}
+            className="mb-5 flex items-center gap-3 rounded-2xl border-2 border-accent bg-accent-soft px-4 py-3"
           >
-            {TRACK_META[t].label}
-          </button>
-        ))}
-      </div>
+            <Star className="h-6 w-6 shrink-0 fill-accent text-accent" />
+            <div>
+              <p className="font-extrabold text-ink">Not a beginner?</p>
+              <p className="text-sm font-semibold text-ink-muted">
+                Take a 2-minute level check and skip what you know.
+              </p>
+            </div>
+          </Link>
+        ) : null}
 
-      {!placementDone[activeTrack] ? (
-        <Link
-          to={`/placement/${activeTrack}`}
-          className="mb-6 flex items-center justify-between rounded-2xl border border-amber-200 bg-accent-soft px-4 py-3"
-        >
-          <div>
-            <p className="font-semibold text-ink">Placement (untimed)</p>
-            <p className="text-sm text-ink-muted">Set your starting level for this track</p>
-          </div>
-          <Star className="h-5 w-5 text-accent" />
-        </Link>
-      ) : null}
-
-      <div className="relative mx-auto flex max-w-sm flex-col items-center gap-0">
         {chapters.map((ch, ci) => {
-          const unlocked = isUnlocked(ch.id, ci)
-          const crowns = chapterCrowns[ch.id] ?? 0
+          const unlocked = isChapterUnlocked(ci, chapters, progress)
+          const mastered = masteredChapters.includes(ch.id)
           const passed = (checkpointHistory[ch.id] ?? []).some((a) => a.passed)
-          const allStepsDone = ch.steps.every((s) => completedSteps.includes(s.id))
-          const currentStepId = findCurrentStep(ch.steps.map((s) => s.id))
+          const allDone = ch.steps.every((s) => completedSteps.includes(s.id))
+          const doneCount = ch.steps.filter((s) => completedSteps.includes(s.id)).length
 
           return (
-            <div key={ch.id} className="flex w-full flex-col items-center">
-              {ci > 0 ? <div className="h-6 w-1 bg-path-done/40" /> : null}
-
-              <div className="mb-2 w-full text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  Chapter {ci + 1}
+            <section key={ch.id} className="mb-8">
+              <div
+                className="rounded-2xl px-4 py-3 text-white"
+                style={{ background: unlocked ? colors.main : '#aeb7c8', boxShadow: `0 4px 0 ${unlocked ? colors.dark : '#8f99ad'}` }}
+              >
+                <p className="text-xs font-extrabold tracking-widest uppercase opacity-90">
+                  Unit {ci + 1}
+                  {mastered ? ' · skipped via level check' : unlocked ? ` · ${doneCount}/${ch.steps.length}` : ' · locked'}
                 </p>
-                <h2 className="font-display text-lg font-bold">{ch.title}</h2>
+                <h2 className="text-xl leading-tight font-extrabold">{ch.title}</h2>
+                <p className="mt-0.5 text-[13px] leading-snug font-semibold opacity-90">{ch.description}</p>
               </div>
 
-              {ch.steps.map((st, si) => {
-                const status = stepStatus(st.id, unlocked)
-                const isCurrent = unlocked && st.id === currentStepId
-                const done = completedSteps.includes(st.id)
+              {!unlocked ? (
+                <Link
+                  to={`/checkpoint/${ch.id}?testout=1`}
+                  className="btn btn-secondary mt-3 !py-2.5 !text-[13px]"
+                >
+                  Already know this? Test out
+                </Link>
+              ) : null}
 
-                return (
-                  <div key={st.id} className="flex flex-col items-center">
-                    {si > 0 || true ? (
-                      <div
-                        className={`h-5 w-1 ${done || isCurrent ? 'bg-path-done' : 'bg-path-lock'}`}
-                      />
-                    ) : null}
-                    {status === 'locked' ? (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-slate-400">
-                        <Lock className="h-5 w-5" />
-                      </div>
-                    ) : (
-                      <Link
+              <div className="mt-5 flex flex-col items-center gap-5">
+                {ch.steps.map((st, si) => {
+                  const done = completedSteps.includes(st.id)
+                  const state: NodeState = !unlocked
+                    ? 'locked'
+                    : done
+                      ? 'done'
+                      : st.id === currentStepId
+                        ? 'current'
+                        : mastered
+                          ? 'mastered'
+                          : 'open'
+                  return (
+                    <div
+                      key={st.id}
+                      className="flex flex-col items-center"
+                      style={{ transform: `translateX(${WIGGLE[si % WIGGLE.length]}px)` }}
+                    >
+                      {state === 'current' ? (
+                        <div className="anim-bob mb-2 flex flex-col items-center">
+                          <div className="rounded-xl border-2 border-line bg-white px-3 py-1 text-xs font-extrabold tracking-wider text-brand uppercase shadow-sm">
+                            Start
+                          </div>
+                          <div className="-mt-px h-2 w-2 rotate-45 border-r-2 border-b-2 border-line bg-white" />
+                        </div>
+                      ) : null}
+                      <Node
+                        state={state}
+                        color={colors.main}
+                        dark={colors.dark}
                         to={`/lesson/${ch.id}/${st.id}`}
-                        className={`flex h-14 w-14 items-center justify-center rounded-full shadow-sm transition ${
-                          done
-                            ? 'bg-path-done text-white'
-                            : isCurrent
-                              ? 'bg-accent text-white ring-4 ring-amber-200'
-                              : 'bg-white text-brand border-2 border-brand'
-                        }`}
+                        label={`${st.title}${done ? ' (done)' : ''}`}
                       >
-                        {done ? <Check className="h-6 w-6" /> : <span className="font-bold">{si + 1}</span>}
-                      </Link>
-                    )}
-                    <p className="mt-1 mb-1 max-w-[10rem] text-center text-xs text-ink-muted">
-                      {st.title}
-                    </p>
-                  </div>
-                )
-              })}
+                        {state === 'locked' ? (
+                          <Lock className="h-7 w-7" strokeWidth={2.5} />
+                        ) : state === 'done' || state === 'mastered' ? (
+                          <Check className="h-8 w-8" strokeWidth={4} />
+                        ) : (
+                          <Star className="h-8 w-8 fill-white" strokeWidth={2} />
+                        )}
+                      </Node>
+                      <p className="mt-2 max-w-[9.5rem] text-center text-xs font-bold text-ink-muted">
+                        {st.title}
+                      </p>
+                    </div>
+                  )
+                })}
 
-              <div className="mt-2 flex flex-col items-center">
-                <div className="h-5 w-1 bg-path-done/40" />
-                {unlocked && allStepsDone ? (
-                  <Link
+                <div className="flex flex-col items-center">
+                  <Node
+                    state={unlocked && (allDone || mastered) ? (passed || mastered ? 'done' : 'open') : 'locked'}
+                    color="#1b2236"
+                    dark="#0b1020"
                     to={`/checkpoint/${ch.id}`}
-                    className={`flex h-16 w-16 items-center justify-center rounded-2xl ${
-                      passed ? 'bg-brand text-white' : 'bg-slate-800 text-amber-300'
-                    }`}
+                    label="Chapter checkpoint"
                   >
-                    <Crown className="h-7 w-7" />
-                  </Link>
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-200 text-slate-400">
-                    <Lock className="h-6 w-6" />
-                  </div>
-                )}
-                <p className="mt-1 text-xs font-medium text-ink-muted">
-                  Checkpoint{crowns > 0 ? ` · ${crowns}/5 crowns` : ''}
-                </p>
+                    {unlocked && (allDone || mastered) ? (
+                      <Crown className="h-8 w-8 fill-amber-300 text-amber-300" strokeWidth={2} />
+                    ) : (
+                      <Lock className="h-7 w-7" strokeWidth={2.5} />
+                    )}
+                  </Node>
+                  <p className="mt-2 text-xs font-bold text-ink-muted">Checkpoint</p>
+                </div>
               </div>
-            </div>
+            </section>
           )
         })}
+
+        {chapters.length > 0 && chapters.every((c) => c.steps.every((s) => completedSteps.includes(s.id))) ? (
+          <div className="flex flex-col items-center py-6 text-center">
+            <Mascot size={72} mood="cheer" />
+            <p className="mt-2 text-sm font-bold text-ink-muted">You finished the whole path. Nice.</p>
+          </div>
+        ) : null}
       </div>
     </div>
   )
