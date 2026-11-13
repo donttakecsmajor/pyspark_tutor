@@ -13,13 +13,22 @@ export async function getSql(): Promise<SqlJsStatic> {
 
 export type SqlCell = string | number | null
 
-export function rowsEqual(actual: SqlCell[][], expected: SqlCell[][]): boolean {
-  const norm = (rows: SqlCell[][]) =>
-    [...rows]
-      .map((r) => r.map((c) => (c === null || c === undefined ? 'NULL' : String(c))).join('\t'))
-      .sort()
-      .join('\n')
+/** Compare result rows. Unordered by default (sorted before comparing); `ordered` compares row order too. */
+export function rowsEqual(actual: SqlCell[][], expected: SqlCell[][], ordered = false): boolean {
+  const norm = (rows: SqlCell[][]) => {
+    const lines = rows.map((r) => r.map((c) => (c === null || c === undefined ? 'NULL' : String(c))).join('\t'))
+    return (ordered ? lines : [...lines].sort()).join('\n')
+  }
   return norm(actual) === norm(expected)
+}
+
+/** True when the query's output columns match the required names (case-insensitive, in order). */
+export function columnsMatch(actual: string[], expected: string[] | undefined): boolean {
+  if (!expected) return true
+  return (
+    actual.length === expected.length &&
+    actual.every((c, i) => c.toLowerCase() === expected[i].toLowerCase())
+  )
 }
 
 export interface QueryResult {

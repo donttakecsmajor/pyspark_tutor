@@ -11,7 +11,7 @@ import type {
   TeachExercise,
 } from '../types/curriculum'
 import { checkFill, checkPyspark, shuffle } from '../engine/checkAnswer'
-import { runUserQuery, rowsEqual, type QueryResult } from '../engine/sqlRunner'
+import { runUserQuery, rowsEqual, columnsMatch, type QueryResult } from '../engine/sqlRunner'
 import { ArrowDown, ArrowUp, Play } from 'lucide-react'
 import { ActionBar, type BarState } from './ActionBar'
 import { Code } from './Code'
@@ -395,6 +395,7 @@ function BugView({ ex, onResult }: { ex: BugExercise; onResult: Cb }) {
 }
 
 const MAX_TRIES_BEFORE_SOLUTION = 2
+const MAX_ERRORS_BEFORE_SOLUTION = 4
 
 function Editor({
   value,
@@ -426,6 +427,7 @@ function CodeSqlView({ ex, onResult }: { ex: CodeSqlExercise; onResult: Cb }) {
   const [ran, setRan] = useState<QueryResult | null>(null)
   const [verdict, setVerdict] = useState<'none' | 'correct' | 'wrong'>('none')
   const [tries, setTries] = useState(0)
+  const [errorTries, setErrorTries] = useState(0)
   const [busy, setBusy] = useState(false)
 
   async function run(): Promise<QueryResult> {
@@ -438,17 +440,36 @@ function CodeSqlView({ ex, onResult }: { ex: CodeSqlExercise; onResult: Cb }) {
 
   async function check() {
     const res = await run()
-    const ok = !res.error && rowsEqual(res.rows, ex.expectedRows)
+    const ok =
+      !res.error &&
+      columnsMatch(res.columns, ex.expectedColumns) &&
+      rowsEqual(res.rows, ex.expectedRows, ex.orderMatters)
     setVerdict(ok ? 'correct' : 'wrong')
-    setTries((t) => t + 1)
+    // A typo (syntax error) shouldn't burn a try or reveal the answer; only real wrong results count.
+    if (!ok) {
+      if (res.error) setErrorTries((t) => t + 1)
+      else setTries((t) => t + 1)
+    }
   }
 
-  const wrongHint = ran?.error
-    ? ran.error
-    : ran
-      ? `Your query returned ${ran.rows.length} row${ran.rows.length === 1 ? '' : 's'}; the answer has ${ex.expectedRows.length}. Compare the columns and the filter.`
-      : ''
-  const showSolution = verdict === 'wrong' && tries >= MAX_TRIES_BEFORE_SOLUTION
+  function wrongHintFor(r: QueryResult): string {
+    if (r.error) {
+      return `SQL says: ${r.error}. Check the spelling of your keywords (SELECT, FROM...), the commas between columns, and your quotes.`
+    }
+    if (!columnsMatch(r.columns, ex.expectedColumns)) {
+      return `Right idea, but the column names should be: ${ex.expectedColumns?.join(', ')}. Use AS to rename.`
+    }
+    if (r.rows.length !== ex.expectedRows.length) {
+      return `Your query returned ${r.rows.length} row${r.rows.length === 1 ? '' : 's'}; the answer has ${ex.expectedRows.length}. Check your WHERE or DISTINCT.`
+    }
+    if (ex.orderMatters && rowsEqual(r.rows, ex.expectedRows, false)) {
+      return 'The right rows, but in the wrong order. Check your ORDER BY.'
+    }
+    return 'Same number of rows, but the values differ. Compare your result with what the question asks for.'
+  }
+  const wrongHint = ran ? wrongHintFor(ran) : ''
+  const showSolution =
+    verdict === 'wrong' && (tries >= MAX_TRIES_BEFORE_SOLUTION || errorTries >= MAX_ERRORS_BEFORE_SOLUTION)
   const bar: BarState = verdict === 'none' ? (code.trim() ? 'ready' : 'disabled') : verdict
 
   return (
@@ -460,6 +481,12 @@ function CodeSqlView({ ex, onResult }: { ex: CodeSqlExercise; onResult: Cb }) {
           {ex.schemaSql}
         </pre>
       </details>
+      {ex.hint ? (
+        <details className="mt-2 rounded-2xl border-2 border-accent/40 bg-accent-soft px-3 py-2 text-sm">
+          <summary className="cursor-pointer font-bold text-accent-dark">Need a hint?</summary>
+          <p className="mt-2 font-semibold text-ink">{ex.hint}</p>
+        </details>
+      ) : null}
       <Editor value={code} onChange={setCode} rows={6} disabled={verdict === 'correct'} />
       <button
         type="button"
