@@ -1,16 +1,33 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useProgress } from '../store/progressStore'
-import { chaptersForTrack } from '../lib/curriculumApi'
-import { STORAGE_KEY } from '../types/progress'
+import { allChapters, chaptersForTrack } from '../lib/curriculumApi'
+import { STORAGE_KEY, type UserProgress } from '../types/progress'
+import type { TrackId } from '../types/curriculum'
+import { WaitlistForm } from '../components/WaitlistForm'
+
+const TRACKS: { id: TrackId; label: string; blurb: string }[] = [
+  { id: 'sql', label: 'SQL', blurb: 'Joins, windows, CTEs. Queries run in your browser.' },
+  { id: 'pyspark', label: 'PySpark', blurb: 'DataFrames, shuffles, lazy evaluation, tuning.' },
+  { id: 'bridge', label: 'Bridge', blurb: 'The same idea in SQL and PySpark, side by side.' },
+]
+
+/** First step of a track's first chapter: a no-signup sample lesson. */
+function sampleLessonPath(track: TrackId): string | null {
+  const chapter = chaptersForTrack(track)[0]
+  const step = chapter?.steps[0]
+  return chapter && step ? `/lesson/${chapter.id}/${step.id}` : null
+}
 
 export function WelcomePage() {
   const navigate = useNavigate()
+  const chapters = allChapters()
+  const stepCount = chapters.reduce((n, c) => n + c.steps.length, 0)
 
-  function start(track: 'sql' | 'pyspark' | 'bridge') {
+  function start(track: TrackId) {
     const first = chaptersForTrack(track)[0]
     const cur = useProgress.getState()
     const unlocked = [...new Set([...cur.unlockedChapters, ...(first ? [first.id] : [])])]
-    const next = {
+    const next: UserProgress = {
       ...cur,
       onboardingDone: true,
       activeTrack: track,
@@ -23,52 +40,56 @@ export function WelcomePage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col px-6 pt-16 pb-10">
+    <div className="flex min-h-dvh flex-col px-6 pt-14 pb-10">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">SparkFluent</p>
       <h1 className="mt-3 font-display text-4xl font-bold leading-tight text-ink">
-        Learn SQL & PySpark like a language
+        Learn SQL &amp; PySpark like a language
       </h1>
       <p className="mt-4 text-[15px] leading-relaxed text-ink-muted">
-        A Duolingo-style path for data engineers: short steps, interactive drills, untimed
-        chapter checkpoints. Progress stays on this device — add to your phone home screen.
+        Short, hands-on steps for data engineers. Build the skills interviews and real pipelines
+        ask for, five minutes at a time, on your phone.
+      </p>
+      <p className="mt-3 text-sm text-ink-muted">
+        {chapters.length} chapters · {stepCount} steps · free to try, no account needed.
       </p>
 
-      <ul className="mt-8 space-y-3 text-sm text-ink">
-        <li className="rounded-xl border border-teal-100 bg-white/80 px-4 py-3">
-          Path of chapters → steps → checkpoint
-        </li>
-        <li className="rounded-xl border border-teal-100 bg-white/80 px-4 py-3">
-          SQL runs in-browser · PySpark pattern drills
-        </li>
-        <li className="rounded-xl border border-teal-100 bg-white/80 px-4 py-3">
-          Mistake review, glossary, export/import backup
-        </li>
+      <h2 className="mt-8 text-sm font-semibold text-ink-muted">Try a lesson now</h2>
+      <ul className="mt-3 space-y-3">
+        {TRACKS.map((t) => {
+          const sample = sampleLessonPath(t.id)
+          return (
+            <li key={t.id} className="rounded-xl border border-teal-100 bg-white/80 px-4 py-3">
+              <p className="font-semibold text-ink">{t.label}</p>
+              <p className="mt-0.5 text-sm text-ink-muted">{t.blurb}</p>
+              <div className="mt-3 flex gap-2">
+                {sample ? (
+                  <Link
+                    to={sample}
+                    className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    Try a lesson
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => start(t.id)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+                >
+                  Start the {t.label} path
+                </button>
+              </div>
+            </li>
+          )
+        })}
       </ul>
 
-      <div className="mt-auto flex flex-col gap-2 pt-10">
-        <p className="mb-1 text-sm font-semibold text-ink-muted">Start with</p>
-        <button
-          type="button"
-          onClick={() => start('sql')}
-          className="rounded-xl bg-brand py-3.5 font-semibold text-white"
-        >
-          SQL
-        </button>
-        <button
-          type="button"
-          onClick={() => start('pyspark')}
-          className="rounded-xl bg-amber-700 py-3.5 font-semibold text-white"
-        >
-          PySpark
-        </button>
-        <button
-          type="button"
-          onClick={() => start('bridge')}
-          className="rounded-xl border border-slate-300 bg-white py-3.5 font-semibold"
-        >
-          Bridge (SQL ↔ PySpark)
-        </button>
+      <div className="mt-8 rounded-xl border border-teal-100 bg-white/80 p-4">
+        <WaitlistForm source="welcome" />
       </div>
+
+      <p className="mt-6 text-xs text-ink-muted">
+        Progress is saved on this device. Add to your home screen to use it like an app.
+      </p>
     </div>
   )
 }

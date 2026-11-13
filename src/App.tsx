@@ -57,14 +57,9 @@ export default function App() {
               </Gate>
             }
           />
-          <Route
-            path="/lesson/:chapterId/:stepId"
-            element={
-              <Gate>
-                <LessonPage />
-              </Gate>
-            }
-          />
+          {/* Deliberately NOT behind Gate: a shared lesson link must open
+              straight into the lesson, no onboarding first. */}
+          <Route path="/lesson/:chapterId/:stepId" element={<LessonPage />} />
           <Route
             path="/checkpoint/:chapterId"
             element={
