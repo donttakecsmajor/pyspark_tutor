@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bookmark } from 'lucide-react'
 import { getChapter, getStep } from '../lib/curriculumApi'
 import { ExercisePlayer } from '../components/ExercisePlayer'
+import { WaitlistForm } from '../components/WaitlistForm'
 import { useProgress } from '../store/progressStore'
 import { exercisePrompt, exerciseTags, isGraded } from '../engine/checkAnswer'
 
@@ -14,6 +15,10 @@ export function LessonPage() {
   const { completeStep, addReview, toggleBookmark, bookmarks, notes, setNote } = useProgress()
   const [index, setIndex] = useState(0)
   const [showNote, setShowNote] = useState(false)
+  const [finished, setFinished] = useState(false)
+  // Visitors arriving from a shared link haven't onboarded; they get a
+  // finish screen with next steps instead of being dropped on an empty path.
+  const isGuest = !useProgress((s) => s.onboardingDone)
 
   const exercises = step?.exercises ?? []
   const current = exercises[index]
@@ -36,6 +41,30 @@ export function LessonPage() {
     )
   }
 
+  if (finished) {
+    return (
+      <div className="flex min-h-dvh flex-col px-6 pt-16 pb-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">
+          Lesson complete
+        </p>
+        <h1 className="mt-3 font-display text-3xl font-bold text-ink">Nice work.</h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-ink-muted">
+          You finished &ldquo;{step.title}&rdquo; from {chapter.title}. There&apos;s a full path
+          after this one, and it&apos;s free to keep going.
+        </p>
+        <Link
+          to="/welcome"
+          className="mt-8 rounded-xl bg-brand py-3.5 text-center font-semibold text-white"
+        >
+          Continue learning
+        </Link>
+        <div className="mt-8 rounded-xl border border-teal-100 bg-white/80 p-4">
+          <WaitlistForm source="lesson-complete" />
+        </div>
+      </div>
+    )
+  }
+
   function handleResult(correct: boolean) {
     if (!current || !chapter || !step) return
     if (isGraded(current) && !correct) {
@@ -49,6 +78,10 @@ export function LessonPage() {
     }
     if (index + 1 >= exercises.length) {
       completeStep(step.id, chapter.id, step.xp)
+      if (isGuest) {
+        setFinished(true)
+        return
+      }
       navigate('/', { replace: true })
       return
     }
@@ -60,7 +93,7 @@ export function LessonPage() {
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(isGuest ? '/welcome' : '/')}
           className="rounded-lg p-2 text-ink-muted hover:bg-white"
         >
           <ArrowLeft className="h-5 w-5" />
